@@ -1,25 +1,77 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+author: "Saurabh"
+date: "10 April 2016"
+output: html_document
 ---
-
 
 ## Loading and preprocessing the data
 
 
+```{r,echo=TRUE}
+setwd("~/Analytics/Data Science/Coursera/5. Reproducible Research")
+steps_data<-read.csv("activity.csv")
+str(steps_data)
+steps_data$date<-as.Date(as.character(steps_data$date))
+str(steps_data)
+```
+
 
 ## What is mean total number of steps taken per day?
 
-
+```{r, echo=FALSE}
+library(sqldf)
+library(ggplot2)
+steps_data1<-sqldf("select date, sum(steps) as num_steps from steps_data group by date")
+steps_data1$num_steps<-as.numeric(steps_data1$num_steps)
+g<-ggplot(steps_data1,aes(x=num_steps))
+g+geom_histogram()+geom_vline(xintercept = mean(steps_data1$num_steps))
+summary(steps_data1$num_steps)
+```
 
 ## What is the average daily activity pattern?
+Interval=835, where average number of steps is maximum
 
-
+```{r,echo=TRUE}
+library(sqldf)
+df<-sqldf("select interval, avg(steps) as avg_steps from steps_data group by interval")
+library(ggplot2)
+g<-ggplot(df,aes(interval,avg_steps))
+g+geom_line()
+```
 
 ## Imputing missing values
+Total number of missing values `sum(is.na(steps_data))`. Only steps column has missing values in the dataframe.
 
+Adding a columns with average steps against each interval so that it can be used to replace missing values. Once added then using mutate function to modify the data.
+
+```{r,echo=TRUE}
+library(sqldf)
+steps_data_2<-sqldf("select a.date, a.interval, b.avg_steps,a.steps
+                       from  steps_data a left join df b on a.interval=b.interval")
+library(dplyr)
+steps_final<-mutate(steps_data_2, steps_full=ifelse(is.na(steps),avg_steps,steps))
+steps_final<-select(steps_final,date,interval,steps_full)
+```
+
+Making a historgram and seeing the summary stats for imputed data set
+```{r,echo=TRUE}
+library(sqldf)
+library(ggplot2)
+steps_final_hist<-sqldf("select date, sum(steps_full) as Total_Steps from steps_final group by date")
+g<-ggplot(steps_final_hist,aes(x=Total_Steps))
+g+geom_histogram()+geom_vline(xintercept=mean(steps_final_hist$Total_Steps), color="red")
+summary(steps_final_hist$Total_Steps)
+```
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r,echo=TRUE}
+steps_final<-mutate(steps_final, day=ifelse(weekdays(date)=="Saturday" |weekdays(date)
+                                                      =="Sunday","Weekend","Weekday"))
+df_final<-sqldf("select interval,day, avg(steps_full) as avg_steps from steps_final
+                group by interval,day")
+g<-ggplot(df_final,aes(interval,avg_steps))
+g+geom_line()+facet_grid(.~day)
+```
